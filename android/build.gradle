@@ -1,0 +1,42 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Workaround: For AGP 8+, some transitive Android library plugins may miss `namespace`.
+// This block sets a namespace from their AndroidManifest `package` if missing.
+subprojects { subproject ->
+    subproject.plugins.withId('com.android.library') {
+        def androidExt = subproject.extensions.findByName('android')
+        if (androidExt && (!androidExt.hasProperty('namespace') || androidExt.namespace == null)) {
+            def manifestFile = file("${subproject.projectDir}/src/main/AndroidManifest.xml")
+            if (manifestFile.exists()) {
+                def manifestText = manifestFile.getText('UTF-8')
+                def m = manifestText =~ /package\s*=\s*"([^"]+)"/
+                if (m.find()) {
+                    def pkg = m.group(1)
+                    try {
+                        androidExt.namespace = pkg
+                        subproject.logger.lifecycle("[namespace-fix] Set namespace '${pkg}' for ${subproject.path}")
+                    } catch (ignored) {
+                        // ignore
+                    }
+                }
+            }
+        }
+    }
+}
+
+rootProject.buildDir = '../build'
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.layout.buildDirectory
+}
